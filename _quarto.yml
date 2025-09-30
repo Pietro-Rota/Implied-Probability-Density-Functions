@@ -1,0 +1,3 @@
+execute:
+  kernel: python313
+  python: "C:/Program Files/Python313/python.exe"

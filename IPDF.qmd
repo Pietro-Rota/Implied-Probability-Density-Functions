@@ -1,0 +1,412 @@
+---
+author:
+  - name: Pietro Rota
+    affiliation:
+      - name: Bayes business school - City St. George
+        city: London
+        state: UK
+        url: https://www.bayes.citystgeorges.ac.uk/
+format:
+  html:
+    code-tools: true
+    code-fold: true
+    code-summary: Show code
+    html-table-processing: none
+    df-print: kable
+    code-block-border-left: royalblue
+    code-block-bg: true
+    toc: true
+    embed-resources: true
+    font-family: system-ui
+    self-contained: true
+execute:
+  echo: true
+  output: true
+title: Implied Probability Density Functions
+jupyter: python3
+---
+
+
+
+what models/analysis were you thinking of carry on
+if you have already read some literature on the topic, please list the references.
+
+Implied volatility probability distributions (IVPD) are a way of understanding what the market is expecting regarding the future price of an asset (both stocks, indexes and ETFs) based on the price of options available. showing the whole distribution of probabilities and the associated strike prices, essentially what is the most probable price for the future.
+
+The study of implied volatility distribution functions (IVDFs) forms a crucial bridge between derivatives pricing theory and the empirical analysis of market expectations and risk preferences. Formally, the IVDF is based on the Risk-Neutral Density (RND), representing the market’s expected distribution of the underlying asset price at a future expiration date, calculated under the risk-neutral measure $\mathbb Q$.
+
+## Research questions
+
+1. Do pre-event distributions contain predictive information about post-event realized outcomes?
+2. Can post-event distributional shifts forecast subsequent market behavior?
+3. Do different event types (macro disruption vs. firm-specific news) generate systematically different distributional signatures?
+
+This to tackle both descriptive analysis and create a framework with practical forecasting applications.
+
+Inuputs:
+Price $P$: The price of the option incorporates expectations of the market operators on the future volatilty of the asset.
+
+Implicite Volatility: Stemming from the price of each option, we can calcolate the  "implicite volatility". It is the volatility that, when inserited in a model like  Black-Scholes, would give you back the market price.
+
+Volatility Smile/Skew: after calculating the single Implied volatility with options for options with different strike prices $K$ with the same maturity $T$, it's not creating a smooth line like what a risk neutral probabilty assumed by B&S, it takes on the shape of a smile or a skew, indicating that the market is expecting the probability of different moviments for extreme prices.
+
+Probability distribution:
+Costruzione della Distribuzione: Utilizzando queste volatilità implicite per l'intera catena di opzioni, si possono costruire delle curve che rappresentano la distribuzione di probabilità neutrale al rischio del prezzo futuro dell'asset. In pratica, queste curve ti dicono quali prezzi futuri sono considerati più probabili dal mercato e quali meno. it could also be bi-modal, the market is either hoping for an increase or a decrease leaving almost no space for the near strike events.
+
+The most important feature of this distribution is where the distribution is centered in term of the strike value, symmetric compared to the current price, is the market expecting a price rise or a fall. If instead the distribution is asymmetrical (skewed) indica una maggiore probabilità di movimenti in una direzione (es. più probabile un calo che un rialzo).
+
+"Fat Tails": Se le code della distribuzione sono più "pesanti" del normale, significa che il mercato attribuisce una probabilità maggiore a eventi estremi (grandi rialzi o grandi crolli) rispetto a quanto previsto da un modello standard.
+
+3D Changes in time: once you have one distribution for one maturity date you can look at how these distributions change over time 3d view
+
+4D Changes in time: changes before and after big important events (earnings call or the announcment of the launch of a new product), we can understand the how the expectations of the market are modified when presented with new informations.
+
+- An uncertain event like the covid pandemic coudl flatten the distribution, indicating more uncertainty,
+
+- Move the peak of the distribution, indicating a change in the direction of the expected price.
+
+## Proof of concept
+
+assuming that there are no market shenanigans
+
+```{python}
+import yfinance as yf
+import numpy as np
+import pandas as pd
+from scipy.stats import norm
+from scipy.optimize import brentq
+import plotly.graph_objects as go
+# import plotly as plo
+# plo.renderers.default = "notebook_connected"  # or "iframe"
+
+from plotly.subplots import make_subplots
+from scipy.stats import norm
+from datetime import datetime
+import matplotlib.pyplot as plt
+```
+
+The core concept is based on Breeden and Litzenberger (1978), who showed that the second derivative of a European call price with respect to strike gives the risk-neutral PDF of the underlying asset price at maturity:
+$$
+f(K)=e^{rT} ⋅ \frac{∂^2C(K)}{∂K^2}​
+$$
+
+```{python}
+def black_scholes_price(S, K, T, r, sigma, option_type="call"):
+    """Black-Scholes price for call/put"""
+    d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+
+    if option_type == "call":
+        return S * norm.cdf(d1) - K * np.exp(-r*T) * norm.cdf(d2)
+    else:  # put
+        return K * np.exp(-r*T) * norm.cdf(-d2) - S * norm.cdf(-d1)
+
+
+def implied_volatility(market_price, S, K, T, r, option_type="call"):
+    """Solve for IV using Brent root finder"""
+    try:
+        f = lambda sigma: black_scholes_price(S, K, T, r, sigma, option_type) - market_price
+        return brentq(f, 1e-6, 5.0, maxiter=500)
+    except:
+        return np.nan
+
+
+def implied_pdf(S, K, T, r, sigma):
+    """Breeden-Litzenberger: risk-neutral density via BS second derivative wrt strike"""
+    d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+    pdf = (np.exp(-r*T) * norm.pdf(d2)) / (K * sigma * np.sqrt(T))
+    return pdf
+```
+
+```{python}
+def calculate_probability_distribution(strike, spot, iv, days_to_exp, risk_free_rate = 0.05):
+    """
+    Calculate the implied probability distribution from Black-Scholes
+    Returns price range and probability density
+    """
+    T = days_to_exp / 365.0
+    
+    if T <= 0 or iv <= 0:
+        return None, None
+    
+    # Generate price range (±4 standard deviations)
+    std_dev = spot * iv * np.sqrt(T)
+    price_range = np.linspace(max(spot - 4*std_dev, 0.01), spot + 4*std_dev, 200)
+    
+    # Calculate log-normal distribution parameters
+    mu = np.log(spot) + (risk_free_rate - 0.5 * iv**2) * T
+    sigma = iv * np.sqrt(T)
+    
+    # Probability density function
+    pdf = (1 / (price_range * sigma * np.sqrt(2 * np.pi))) * \
+          np.exp(-0.5 * ((np.log(price_range) - mu) / sigma)**2)
+    
+    return price_range, pdf
+
+def get_option_chain_data(ticker_symbol):
+    """
+    Fetch complete option chain data for all expirations
+    """
+    ticker = yf.Ticker(ticker_symbol)
+    current_price = ticker.history(period='1d')['Close'].iloc[-1]
+    
+    expirations = ticker.options
+    
+    all_options = []
+    
+    for exp_date in expirations:
+        opt_chain = ticker.option_chain(exp_date)
+        
+        # Process calls
+        calls = opt_chain.calls.copy()
+        calls['type'] = 'call'
+        calls['expiration'] = exp_date
+        
+        # Process puts
+        puts = opt_chain.puts.copy()
+        puts['type'] = 'put'
+        puts['expiration'] = exp_date
+        
+        all_options.append(pd.concat([calls, puts]))
+    
+    options_df = pd.concat(all_options, ignore_index=True)
+    
+    # Calculate days to expiration
+    options_df['expiration'] = pd.to_datetime(options_df['expiration'])
+    options_df['days_to_exp'] = (options_df['expiration'] - datetime.now()).dt.days
+    
+    # Filter out options with missing IV
+    options_df = options_df[options_df['impliedVolatility'].notna()]
+    options_df = options_df[options_df['impliedVolatility'] > 0]
+    
+    return options_df, current_price
+
+def create_3d_ipdf_surface(options_df, current_price):
+    """
+    Create 3D surface plot showing how IPDF changes across strikes and expirations
+    """
+    # Group by expiration
+    expirations = sorted(options_df['expiration'].unique())
+    
+    # Prepare data for surface plot
+    price_ranges = []
+    pdfs_matrix = []
+    exp_labels = []
+    
+    for exp in expirations:
+        exp_data = options_df[options_df['expiration'] == exp]
+        days_to_exp = exp_data['days_to_exp'].iloc[0]
+        
+        # Use ATM option IV as reference
+        atm_option = exp_data.iloc[(exp_data['strike'] - current_price).abs().argsort()[:1]]
+        if len(atm_option) > 0:
+            iv = atm_option['impliedVolatility'].iloc[0]
+            
+            price_range, pdf = calculate_probability_distribution(
+                current_price, current_price, iv, days_to_exp
+            )
+            
+            if price_range is not None:
+                price_ranges.append(price_range)
+                pdfs_matrix.append(pdf)
+                exp_labels.append(f"{exp.strftime('%Y-%m-%d')} ({days_to_exp}d)")
+    
+    # Create meshgrid for 3D plot
+    if len(price_ranges) > 0:
+        fig = go.Figure(data=[go.Surface(
+            x=price_ranges[0],
+            y=list(range(len(exp_labels))),
+            z=pdfs_matrix,
+            colorscale='Viridis',
+            opacity=0.8,
+            name='Probability Density'
+        )])
+        
+        fig.update_layout(
+            title=f'3D Implied Probability Distribution - Full Option Chain looking at {TICKER}',
+            scene=dict(
+                xaxis_title='Stock Price',
+                yaxis=dict(
+                    title='Expiration',
+                    ticktext=exp_labels,
+                    tickvals=list(range(len(exp_labels)))
+                ),
+                zaxis_title='Probability Density',
+                camera=dict(eye=dict(x=1.5, y=1.5, z=1.3))
+            ),
+            height=700
+        )
+        
+        return fig
+    return None
+
+def create_ipdf_overlay(options_df, current_price):
+    """
+    Create 2D plot with multiple IPDFs overlaid with alpha transparency
+    """
+    fig, ax = plt.subplots(figsize=(12, 7))
+    
+    expirations = sorted(options_df['expiration'].unique())
+    
+    colors = plt.cm.tab10(np.linspace(0, 1, 10))
+    
+    for idx, exp in enumerate(expirations[:8]):
+        exp_data = options_df[options_df['expiration'] == exp]
+        days_to_exp = exp_data['days_to_exp'].iloc[0]
+        
+        # Use ATM option IV
+        atm_option = exp_data.iloc[(exp_data['strike'] - current_price).abs().argsort()[:1]]
+        if len(atm_option) > 0:
+            iv = atm_option['impliedVolatility'].iloc[0]
+            
+            price_range, pdf = calculate_probability_distribution(
+                current_price, current_price, iv, days_to_exp, risk_free_rate = r
+            )
+            
+            if price_range is not None:
+                ax.plot(price_range, pdf, 
+                       label=f"{exp.strftime('%Y-%m-%d')} ({days_to_exp}d)",
+                       color=colors[idx % len(colors)], linewidth=2)
+                ax.fill_between(price_range, pdf, alpha=0.3, color=colors[idx % len(colors)])
+    
+    # Add vertical line for current price
+    ax.axvline(x=current_price, linestyle='--', color='red', linewidth=2,
+               label=f'Current: ${current_price:.2f}')
+    
+    ax.set_title(f'Implied Probability Distribution Functions - Overlay View looking at {TICKER}', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Stock Price', fontsize=12)
+    ax.set_ylabel('Probability Density', fontsize=12)
+    ax.legend(loc='upper right', fontsize=9)
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    
+    return fig
+
+def create_mode_and_quartiles(options_df, current_price):
+    """
+    Create chart showing most probable value (mode) and confidence intervals
+    """
+    expirations = sorted(options_df['expiration'].unique())
+    
+    exp_labels = []
+    modes = []
+    q25 = []
+    q75 = []
+    q5 = []
+    q95 = []
+    days_list = []
+    
+    for exp in expirations:
+        exp_data = options_df[options_df['expiration'] == exp]
+        days_to_exp = exp_data['days_to_exp'].iloc[0]
+        
+        atm_option = exp_data.iloc[(exp_data['strike'] - current_price).abs().argsort()[:1]]
+        if len(atm_option) > 0:
+            iv = atm_option['impliedVolatility'].iloc[0]
+            T = days_to_exp / 365.0
+            
+            # Mode of lognormal distribution
+            mode = current_price * np.exp(-iv**2 * T)
+            
+            # Calculate quantiles using lognormal distribution
+            mu = np.log(current_price) + (0.05 - 0.5 * iv**2) * T
+            sigma = iv * np.sqrt(T)
+            
+            q5_val = np.exp(mu + sigma * norm.ppf(0.05))
+            q25_val = np.exp(mu + sigma * norm.ppf(0.25))
+            q75_val = np.exp(mu + sigma * norm.ppf(0.75))
+            q95_val = np.exp(mu + sigma * norm.ppf(0.95))
+            
+            exp_labels.append(f"{exp.strftime('%m/%d')}")
+            modes.append(mode)
+            q25.append(q25_val)
+            q75.append(q75_val)
+            q5.append(q5_val)
+            q95.append(q95_val)
+            days_list.append(days_to_exp)
+    
+    fig, ax = plt.subplots(figsize=(12, 7))
+    
+    x_pos = np.arange(len(exp_labels))
+    
+    # 90% confidence interval
+    ax.fill_between(x_pos, q5, q95, alpha=0.3, color='lightblue', label='90% CI (5th-95th)')
+    
+    # 50% confidence interval (IQR)
+    ax.fill_between(x_pos, q25, q75, alpha=0.5, color='blue', label='50% CI (25th-75th)')
+    
+    # Mode (most probable value)
+    ax.plot(x_pos, modes, 'o-', color='darkgreen', linewidth=3, 
+            markersize=8, label='Most Probable (Mode)')
+    
+    # Current price line
+    ax.axhline(y=current_price, linestyle='--', color='red', linewidth=2,
+               label=f'Current: ${current_price:.2f}')
+    
+    ax.set_title(f'Most Probable Value and Confidence Intervals by Expiration looking at {TICKER}', 
+                 fontsize=14, fontweight='bold')
+    ax.set_xlabel('Expiration Date', fontsize=12)
+    ax.set_ylabel('Stock Price', fontsize=12)
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(exp_labels, rotation=45, ha='right')
+    ax.legend(loc='best', fontsize=10)
+    ax.grid(True, alpha=0.3, axis='y')
+    plt.tight_layout()
+    
+    return fig
+```
+
+```{python}
+# Set ticker symbol
+TICKER = "SPY"  # Change this to any ticker
+interest = yf.Ticker("^IRX")
+r = interest.history(period="1d")["Close"].iloc[-1]/100  # assume risk-free rate ~5% (you could pull ^IRX)
+
+print(f"Fetching option chain data for {TICKER}...")
+options_df, current_price = get_option_chain_data(TICKER)
+
+print(f"Current price: ${current_price:.2f}")
+print(f"Total options loaded: {len(options_df)}")
+print(f"Expirations available: {len(options_df['expiration'].unique())}")
+```
+
+```{python}
+# Create visualizations
+print("\nGenerating 3D IPDF surface plot...")
+fig_3d = create_3d_ipdf_surface(options_df, current_price)
+fig_3d.show()
+```
+
+```{python}
+print("Generating IPDF overlay plot...")
+fig_overlay = create_ipdf_overlay(options_df, current_price)
+fig_overlay.show()
+```
+
+```{python}
+print("Generating mode and quartiles plot...")
+fig_quartiles = create_mode_and_quartiles(options_df, current_price)
+fig_quartiles.show()
+```
+
+## Sitography
+
+1. [A New Nonparametric Estimate of the Risk-Neutral Density with Applications to Variance Swaps - Frontiers](https://www.frontiersin.org/journals/applied-mathematics-and-statistics/articles/10.3389/fams.2020.611878/full)
+2. [Risk Neutral Densities: A Review - NYU Stern](https://pages.stern.nyu.edu/~sfiglews/documents/RND%20Review%20ver4.pdf)
+3. [Market Volatility Risk in an Era of Extreme Events - SOA](https://www.soa.org/49e238/globalassets/assets/files/resources/research-report/2023/market-volatility-extreme-events.pdf)
+4. [Volatility Skew: Insights Into Market Sentiment and Options Trading Strategies - Investopedia](https://www.investopedia.com/terms/v/volatility-skew.asp)
+5. [Recovering risk aversion from option prices and relized returns](https://d-nb.info/1103138685/34)
+6. [Macroeconomic Announcement Premium - National Bureau of Economic Research](https://www.nber.org/system/files/working_papers/w31923/w31923.pdf)
+7. [A Simple and Reliable Way to Compute Option-Based Risk-Neutral ...](https://www.newyorkfed.org/medialibrary/media/research/staff_reports/sr677.pdf)
+8. [Sparse Analysis Model Based Multiplicative Noise Removal with Enhanced Regularization](https://openresearch.surrey.ac.uk/esploro/outputs/journalArticle/Sparse-Analysis-Model-Based-Multiplicative-Noise/99516214702346)
+9. [[2403.17187] Alternatives to classical option pricing - arXiv](https://arxiv.org/abs/2403.17187)
+10. [Implied risk-neutral distribution as a closed-form function of the volatility smile | Request PDF](https://www.researchgate.net/publication/229047196_Implied_risk-neutral_distribution_as_a_closed-form_function_of_the_volatility_smile)
+11. [Smile&Smirk_v11_2021.pdf - City Research Online](https://openaccess.city.ac.uk/id/eprint/26594/1/Smile%26Smirk_v11_2021.pdf)
+12. [Skewness Risk Premium: Theory and Empirical Evidence - ORBilu](https://orbilu.uni.lu/bitstream/10993/18515/1/Skewness%20Risk%20Premium_Theory%20and%20Empirical%20Evidence_Lehnert_Lin_Wolff_March%202014%20(2).pdf)
+13. [The predictability of skewness risk premium on stock returns: Evidence from Chinese market](https://ideas.repec.org/a/eee/reveco/v87y2023icp576-594.html)
+14. [MODELING AND FORECASTING REALIZED VOLATILITY - Bank for International Settlements](https://www.bis.org/cgfs/Diebold-et-al.pdf)
+15. [Implied Volatility and Historical Volatility - DiVA portal](https://www.diva-portal.org/smash/get/diva2:1446522/FULLTEXT01.pdf)
+16. [Risk Premium around Macroeconomic Announcements: Evidence from Delta-Neutral Straddles](https://lup.lub.lu.se/student-papers/record/9197108/file/9197117.pdf)
+17. [NBER WORKING PAPER SERIES INFLATION DYNAMICS AND TIME-VARYING VOLATILITY](https://www.nber.org/system/files/working_papers/w19148/w19148.pdf)
+18. [The Stock Implied Volatility and the Implied Dividend Volatility - ResearchGate](https://www.researchgate.net/publication/356462920_The_Stock_Implied_Volatility_and_the_Implied_Dividend_Volatility)
