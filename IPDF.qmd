@@ -84,6 +84,7 @@ from plotly.subplots import make_subplots
 from scipy.stats import norm
 from datetime import datetime
 import matplotlib.pyplot as plt
+import time
 ```
 
 The core concept is based on Breeden and Litzenberger (1978), who showed that the second derivative of a European call price with respect to strike gives the risk-neutral PDF of the underlying asset price at maturity:
@@ -224,7 +225,7 @@ def create_3d_ipdf_surface(options_df, current_price):
             if price_range is not None:
                 price_ranges.append(price_range)
                 pdfs_matrix.append(pdf)
-                exp_labels.append(f"{exp.strftime('%Y-%m-%d')} ({days_to_exp}d)")
+                exp_labels.append(f"{exp.strftime('%Y-%m')} ({days_to_exp}d)")
     
     # Create meshgrid for 3D plot
     if len(price_ranges) > 0:
@@ -280,7 +281,7 @@ def create_ipdf_overlay(options_df, current_price):
             
             if price_range is not None:
                 ax.plot(price_range, pdf, 
-                       label=f"{exp.strftime('%Y-%m-%d')} ({days_to_exp}d)",
+                       label=f"{exp.strftime('%Y-%M')} ({days_to_exp}d)",
                        color=colors[idx % len(colors)], linewidth=2)
                 ax.fill_between(price_range, pdf, alpha=0.3, color=colors[idx % len(colors)])
     
@@ -289,6 +290,7 @@ def create_ipdf_overlay(options_df, current_price):
                label=f'Current: ${current_price:.2f}')
     
     ax.set_title('Implied Probability Distribution Functions - Overlay View', fontsize=14, fontweight='bold')
+    ax.set_caption(f'For {TICKER}', fontsize=14, fontweight='bold')
     ax.set_xlabel('Stock Price', fontsize=12)
     ax.set_ylabel('Probability Density', fontsize=12)
     ax.legend(loc='upper right', fontsize=9)
@@ -332,7 +334,7 @@ def create_mode_and_quartiles(options_df, current_price):
             q75_val = np.exp(mu + sigma * norm.ppf(0.75))
             q95_val = np.exp(mu + sigma * norm.ppf(0.95))
             
-            exp_labels.append(f"{exp.strftime('%m/%d')}")
+            exp_labels.append(f"{exp.strftime('%Y-%M')}")
             modes.append(mode)
             q25.append(q25_val)
             q75.append(q75_val)
@@ -375,7 +377,9 @@ def create_mode_and_quartiles(options_df, current_price):
 # Set ticker symbol
 TICKER = "SPY"  # Change this to any ticker
 interest = yf.Ticker("^IRX")
-r = interest.history(period="1d")["Close"].iloc[-1]/100  # assume risk-free rate ~5% (you could pull ^IRX)
+time.sleep(2)
+r = 0.04
+# interest.history(period="1d")["Close"].iloc[-1]/100  # assume risk-free rate ~5% (you could pull ^IRX)
 
 print(f"Fetching option chain data for {TICKER}...")
 options_df, current_price = get_option_chain_data(TICKER)
@@ -426,6 +430,7 @@ fig_quartiles.show()
 18. [The Stock Implied Volatility and the Implied Dividend Volatility - ResearchGate](https://www.researchgate.net/publication/356462920_The_Stock_Implied_Volatility_and_the_Implied_Dividend_Volatility)
 
 ```{python}
+#| include: false
 import winsound
 winsound.PlaySound("SystemHand", winsound.SND_ALIAS)
 ```
