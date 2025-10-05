@@ -45,9 +45,9 @@ Key Distinction: Risk-neutral vs. physical probability distributions, linked via
 
 - Kurtosis (4th moment): Jump probability and fat-tail risk.
 
-uordere
+Risk Premia:
 
-* Risk Premia:
+- Volatility Risk Premium (VRP)
 
 * Volatility Risk Premium (VRP)
 

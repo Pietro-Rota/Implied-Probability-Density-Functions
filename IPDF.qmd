@@ -1,30 +1,33 @@
 ---
+title: "The Structural Dynamics of Option-Implied Probability Distributions – Theoretical Foundations and Advanced Research Directions"
 author:
   - name: Pietro Rota
     affiliation:
-      - name: Bayes business school - City St. George
+      - name: Bayes Business School – City, St George’s University of London
         city: London
         state: UK
         url: https://www.bayes.citystgeorges.ac.uk/
+jupyter: python3
+
 format:
   html:
+    toc: true
     code-tools: true
     code-fold: true
-    code-summary: Show code
-    html-table-processing: none
+    code-summary: "Show code"
     df-print: kable
     code-block-border-left: royalblue
     code-block-bg: true
-    toc: true
-    embed-resources: true
     font-family: system-ui
     self-contained: true
-    html-math-method: mathjax
+    embed-resources: true
+#    mathjax: "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+
 execute:
   echo: true
   output: true
-title: The Structural Dynamics of Option-Implied Probability Distributions - Theoretical Foundations and Advanced Research Directions
-jupyter: python3
+  warning: false
+  message: false
 ---
 
 Implied volatility probability distributions (IVPD) are a way of understanding what the market is expecting regarding the future price of an asset (both stocks, indexes and ETFs) based on the price of options available. showing the whole distribution of probabilities and the associated strike prices, essentially what is the most probable price for the future.
@@ -66,11 +69,12 @@ The most important feature of this distribution is where the distribution is cen
 
 - Bloomberg: for option data
     - Real time pricing for securities plus extensive historical records even for Option chains.
-- Factiva: 
+- Factiva:
     - Easy to see how the news are impacting certain sceurities, seeing when the news hit is crucial for understainding where the actual market came to a consensus on the impact of the event.
 
 
 ```{python}
+#| label: import 
 import yfinance as yf
 import numpy as np
 import pandas as pd
@@ -81,10 +85,14 @@ import plotly.graph_objects as go
 # plo.renderers.default = "notebook_connected"  # or "iframe"
 
 from plotly.subplots import make_subplots
-from scipy.stats import norm
 from datetime import datetime
 import matplotlib.pyplot as plt
+
+import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+
 import time
+import random
 ```
 
 The core concept is based on Breeden and Litzenberger (1978), who showed that the second derivative of a European call price with respect to strike gives the risk-neutral PDF of the underlying asset price at maturity:
@@ -106,6 +114,7 @@ $$
 $$
 
 ```{python}
+#| label: basic formulas
 def black_scholes_price(S, K, T, r, sigma, option_type="call"):
     """Black-Scholes price for call/put"""
     d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
@@ -116,7 +125,6 @@ def black_scholes_price(S, K, T, r, sigma, option_type="call"):
     else:  # put
         return K * np.exp(-r*T) * norm.cdf(-d2) - S * norm.cdf(-d1)
 
-
 def implied_volatility(market_price, S, K, T, r, option_type="call"):
     """Solve for IV using Brent root finder"""
     try:
@@ -124,7 +132,6 @@ def implied_volatility(market_price, S, K, T, r, option_type="call"):
         return brentq(f, 1e-6, 5.0, maxiter=500)
     except:
         return np.nan
-
 
 def implied_pdf(S, K, T, r, sigma):
     """Breeden-Litzenberger: risk-neutral density via BS second derivative wrt strike"""
@@ -135,6 +142,7 @@ def implied_pdf(S, K, T, r, sigma):
 ```
 
 ```{python}
+#| label: formulas
 def calculate_probability_distribution(strike, spot, iv, days_to_exp, risk_free_rate = 0.05):
     """
     Calculate the implied probability distribution from Black-Scholes
@@ -197,7 +205,7 @@ def get_option_chain_data(ticker_symbol):
     
     return options_df, current_price
 
-def create_3d_ipdf_surface(options_df, current_price):
+def create_3d_ipdf_surface(options_df, current_price, ticker = "IDK"):
     """
     Create 3D surface plot showing how IPDF changes across strikes and expirations
     """
@@ -209,7 +217,7 @@ def create_3d_ipdf_surface(options_df, current_price):
     pdfs_matrix = []
     exp_labels = []
     
-    for exp in expirations[:8]:  # Limit to first 8 expirations for clarity
+    for exp in expirations:  
         exp_data = options_df[options_df['expiration'] == exp]
         days_to_exp = exp_data['days_to_exp'].iloc[0]
         
@@ -225,7 +233,7 @@ def create_3d_ipdf_surface(options_df, current_price):
             if price_range is not None:
                 price_ranges.append(price_range)
                 pdfs_matrix.append(pdf)
-                exp_labels.append(f"{exp.strftime('%Y-%m')} ({days_to_exp}d)")
+                exp_labels.append(f"{exp.strftime('%y-%m')} ({days_to_exp}d)")
     
     # Create meshgrid for 3D plot
     if len(price_ranges) > 0:
@@ -239,9 +247,9 @@ def create_3d_ipdf_surface(options_df, current_price):
         )])
         
         fig.update_layout(
-            title='3D Implied Probability Distribution - Full Option Chain',
+            title= f'3D Implied Probability Distribution - Full Option Chain for {ticker}',
             scene=dict(
-                xaxis_title='Stock Price',
+                xaxis_title='Strike Price',
                 yaxis=dict(
                     title='Expiration',
                     ticktext=exp_labels,
@@ -256,7 +264,7 @@ def create_3d_ipdf_surface(options_df, current_price):
         return fig
     return None
 
-def create_ipdf_overlay(options_df, current_price):
+def create_ipdf_overlay(options_df, current_price, ticker = "IDK"):
     """
     Create 2D plot with multiple IPDFs overlaid with alpha transparency
     """
@@ -264,9 +272,11 @@ def create_ipdf_overlay(options_df, current_price):
     
     expirations = sorted(options_df['expiration'].unique())
     
-    colors = plt.cm.tab10(np.linspace(0, 1, 10))
+    # Create blue gradient from dark to light
+    num_exps = len(expirations)
+    colors = plt.cm.Blues(np.linspace(0.9, 0.3, num_exps))  # Dark to light blues
     
-    for idx, exp in enumerate(expirations[:8]):
+    for idx, exp in enumerate(expirations):
         exp_data = options_df[options_df['expiration'] == exp]
         days_to_exp = exp_data['days_to_exp'].iloc[0]
         
@@ -281,25 +291,26 @@ def create_ipdf_overlay(options_df, current_price):
             
             if price_range is not None:
                 ax.plot(price_range, pdf, 
-                       label=f"{exp.strftime('%Y-%M')} ({days_to_exp}d)",
-                       color=colors[idx % len(colors)], linewidth=2)
-                ax.fill_between(price_range, pdf, alpha=0.3, color=colors[idx % len(colors)])
+                       label=f"{exp.strftime('%y-%m')} - {days_to_exp}d",
+                       color=colors[idx], linewidth=2)
+                ax.fill_between(price_range, pdf, alpha=0.3, color=colors[idx])
     
     # Add vertical line for current price
     ax.axvline(x=current_price, linestyle='--', color='red', linewidth=2,
                label=f'Current: ${current_price:.2f}')
     
-    ax.set_title('Implied Probability Distribution Functions - Overlay View', fontsize=14, fontweight='bold')
-    ax.set_caption(f'For {TICKER}', fontsize=14, fontweight='bold')
+    ax.set_title(f'{ticker} - Implied Probability Distribution Functions - Overlay View', 
+                 fontsize=14, fontweight='bold')
     ax.set_xlabel('Stock Price', fontsize=12)
     ax.set_ylabel('Probability Density', fontsize=12)
     ax.legend(loc='upper right', fontsize=9)
     ax.grid(True, alpha=0.3)
+    fig.text(1, 0, s= f'for: {ticker}', ha = "right")
     plt.tight_layout()
     
-    return fig
+    return 
 
-def create_mode_and_quartiles(options_df, current_price):
+def create_mode_and_quartiles(options_df, current_price, ticker = "IDK"):
     """
     Create chart showing most probable value (mode) and confidence intervals
     """
@@ -313,7 +324,7 @@ def create_mode_and_quartiles(options_df, current_price):
     q95 = []
     days_list = []
     
-    for exp in expirations[:12]:
+    for exp in expirations:
         exp_data = options_df[options_df['expiration'] == exp]
         days_to_exp = exp_data['days_to_exp'].iloc[0]
         
@@ -334,7 +345,7 @@ def create_mode_and_quartiles(options_df, current_price):
             q75_val = np.exp(mu + sigma * norm.ppf(0.75))
             q95_val = np.exp(mu + sigma * norm.ppf(0.95))
             
-            exp_labels.append(f"{exp.strftime('%Y-%M')}")
+            exp_labels.append(f"{exp.strftime('%y-%m')} - {days_to_exp}d")
             modes.append(mode)
             q25.append(q25_val)
             q75.append(q75_val)
@@ -368,21 +379,27 @@ def create_mode_and_quartiles(options_df, current_price):
     ax.set_xticklabels(exp_labels, rotation=45, ha='right')
     ax.legend(loc='best', fontsize=10)
     ax.grid(True, alpha=0.3, axis='y')
+    fig.text(1, 0.1, f'for: {ticker}', ha = "right")
     plt.tight_layout()
     
-    return fig
+    return 
 ```
 
 ```{python}
-# Set ticker symbol
-TICKER = "SPY"  # Change this to any ticker
-interest = yf.Ticker("^IRX")
-time.sleep(2)
+#| label: Set ticker symbol
+TICKER = "AAPL"  # Change this to any ticker
+# interest = yf.Ticker("^IRX")
 r = 0.04
-# interest.history(period="1d")["Close"].iloc[-1]/100  # assume risk-free rate ~5% (you could pull ^IRX)
+# interest.history(period="1d")["Close"].iloc[-1]/100  
 
 print(f"Fetching option chain data for {TICKER}...")
-options_df, current_price = get_option_chain_data(TICKER)
+
+from pathlib import Path
+
+file_path = Path("C:\\Users\\pietr\\OneDrive - City St George's, University of London\\Documents\\a2025-2026 BAYES\\Implied_Probability_Density_Functions\\AAPL_option_chain.xlsx")
+
+options_df = pd.read_excel(file_path)
+current_price = 258.02
 
 print(f"Current price: ${current_price:.2f}")
 print(f"Total options loaded: {len(options_df)}")
@@ -390,22 +407,21 @@ print(f"Expirations available: {len(options_df['expiration'].unique())}")
 ```
 
 ```{python}
-# Create visualizations
+#| label: Create 3d visualizations
 print("\nGenerating 3D IPDF surface plot...")
-fig_3d = create_3d_ipdf_surface(options_df, current_price)
-fig_3d.show()
+create_3d_ipdf_surface(options_df, current_price, ticker="AAPL")
 ```
 
 ```{python}
+#| label: Create overlay visualizations
 print("Generating IPDF overlay plot...")
-fig_overlay = create_ipdf_overlay(options_df, current_price)
-fig_overlay.show()
+create_ipdf_overlay(options_df, current_price, ticker="AAPL")
 ```
 
 ```{python}
+#| label: Create time-strike visualization
 print("Generating mode and quartiles plot...")
-fig_quartiles = create_mode_and_quartiles(options_df, current_price)
-fig_quartiles.show()
+create_mode_and_quartiles(options_df, current_price, ticker="AAPL")
 ```
 
 ## Sitography
@@ -432,6 +448,14 @@ fig_quartiles.show()
 ```{python}
 #| include: false
 import winsound
-winsound.PlaySound("SystemHand", winsound.SND_ALIAS)
+winsound.PlaySound("C:/Offline_Projects/beep.wav", winsound.SND_FILENAME)
+winsound.Beep(2000, 2000)   # A5 note for 0.2s
+1
 ```
 
+
+```{python}
+import pygame
+pygame.mixer.init()
+pygame.mixer.Sound("C:/Offline_Projects/beep.mp3").play()
+```
