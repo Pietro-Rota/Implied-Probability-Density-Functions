@@ -20,8 +20,8 @@ format:
     code-block-bg: true
     font-family: system-ui
     self-contained: true
-    embed-resources: true
-#    mathjax: "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    # mathjax: "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    html-math-method: katex
 
 execute:
   echo: true
@@ -68,9 +68,9 @@ The most important feature of this distribution is where the distribution is cen
 ### Data sources
 
 - Bloomberg: for option data
-    - Real time pricing for securities plus extensive historical records even for Option chains.
+  - Real time pricing for securities plus extensive historical records even for Option chains.
 - Factiva:
-    - Easy to see how the news are impacting certain sceurities, seeing when the news hit is crucial for understainding where the actual market came to a consensus on the impact of the event.
+  - Easy to see how the news are impacting certain sceurities, seeing when the news hit is crucial for understainding where the actual market came to a consensus on the impact of the event.
 
 
 ```{python}
@@ -445,16 +445,10 @@ create_mode_and_quartiles(options_df, current_price, ticker="AAPL")
 17. [NBER WORKING PAPER SERIES INFLATION DYNAMICS AND TIME-VARYING VOLATILITY](https://www.nber.org/system/files/working_papers/w19148/w19148.pdf)
 18. [The Stock Implied Volatility and the Implied Dividend Volatility - ResearchGate](https://www.researchgate.net/publication/356462920_The_Stock_Implied_Volatility_and_the_Implied_Dividend_Volatility)
 
+
 ```{python}
 #| include: false
-import winsound
-winsound.PlaySound("C:/Offline_Projects/beep.wav", winsound.SND_FILENAME)
-winsound.Beep(2000, 2000)   # A5 note for 0.2s
-1
-```
-
-
-```{python}
+#| label: final beep
 import pygame
 pygame.mixer.init()
 pygame.mixer.Sound("C:/Offline_Projects/beep.mp3").play()
