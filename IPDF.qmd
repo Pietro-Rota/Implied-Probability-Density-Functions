@@ -65,13 +65,12 @@ The most important feature of this distribution is where the distribution is cen
 
 ## Proof of concept
 
-### Data sources
+**Data sources**
 
 - Bloomberg: for option data
   - Real time pricing for securities plus extensive historical records even for Option chains.
 - Factiva:
   - Easy to see how the news are impacting certain sceurities, seeing when the news hit is crucial for understainding where the actual market came to a consensus on the impact of the event.
-
 
 ```{python}
 #| label: import 
@@ -100,7 +99,7 @@ $$
 f(K)=e^{rT} ⋅ \frac{∂^2C(K)}{∂K^2}​
 $$
 
-So the math ends up being really simple 
+So the math ends up being really simple
 $$
 d_1 = \frac{\ln \left(\frac SK\right) + \left(r + \tfrac 12\sigma^2\right)T}{\sigma \sqrt{T}}
 $$
@@ -114,7 +113,7 @@ $$
 $$
 
 ```{python}
-#| label: basic formulas
+#| label: basic-formulas
 def black_scholes_price(S, K, T, r, sigma, option_type="call"):
     """Black-Scholes price for call/put"""
     d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
@@ -180,7 +179,7 @@ def get_option_chain_data(ticker_symbol):
     
     for exp_date in expirations:
         opt_chain = ticker.option_chain(exp_date)
-        
+        time.sleep(2)
         # Process calls
         calls = opt_chain.calls.copy()
         calls['type'] = 'call'
@@ -299,13 +298,13 @@ def create_ipdf_overlay(options_df, current_price, ticker = "IDK"):
     ax.axvline(x=current_price, linestyle='--', color='red', linewidth=2,
                label=f'Current: ${current_price:.2f}')
     
-    ax.set_title(f'{ticker} - Implied Probability Distribution Functions - Overlay View', 
+    ax.set_title("Implied Probability Distribution Functions - Overlay View", 
                  fontsize=14, fontweight='bold')
     ax.set_xlabel('Stock Price', fontsize=12)
     ax.set_ylabel('Probability Density', fontsize=12)
     ax.legend(loc='upper right', fontsize=9)
     ax.grid(True, alpha=0.3)
-    fig.text(1, 0, s= f'for: {ticker}', ha = "right")
+    fig.text(1, 0.05, s= f'for: {ticker}', ha = "right")
     plt.tight_layout()
     
     return 
@@ -386,7 +385,7 @@ def create_mode_and_quartiles(options_df, current_price, ticker = "IDK"):
 ```
 
 ```{python}
-#| label: Set ticker symbol
+#| label: Set-ticker-symbol
 TICKER = "AAPL"  # Change this to any ticker
 # interest = yf.Ticker("^IRX")
 r = 0.04
@@ -404,23 +403,21 @@ current_price = 258.02
 print(f"Current price: ${current_price:.2f}")
 print(f"Total options loaded: {len(options_df)}")
 print(f"Expirations available: {len(options_df['expiration'].unique())}")
+options_df[["contractSymbol", "strike", "lastPrice", "bid", "ask", "change", "impliedVolatility", "inTheMoney", "type", "expiration", "days_to_exp"]]
 ```
 
 ```{python}
-#| label: Create 3d visualizations
-print("\nGenerating 3D IPDF surface plot...")
+#| label: Create-3d-visualizations
 create_3d_ipdf_surface(options_df, current_price, ticker="AAPL")
 ```
 
 ```{python}
-#| label: Create overlay visualizations
-print("Generating IPDF overlay plot...")
+#| label: create-overlay-visualizations
 create_ipdf_overlay(options_df, current_price, ticker="AAPL")
 ```
 
 ```{python}
-#| label: Create time-strike visualization
-print("Generating mode and quartiles plot...")
+#| label: Create-time-strike-visualization
 create_mode_and_quartiles(options_df, current_price, ticker="AAPL")
 ```
 
@@ -444,7 +441,6 @@ create_mode_and_quartiles(options_df, current_price, ticker="AAPL")
 16. [Risk Premium around Macroeconomic Announcements: Evidence from Delta-Neutral Straddles](https://lup.lub.lu.se/student-papers/record/9197108/file/9197117.pdf)
 17. [NBER WORKING PAPER SERIES INFLATION DYNAMICS AND TIME-VARYING VOLATILITY](https://www.nber.org/system/files/working_papers/w19148/w19148.pdf)
 18. [The Stock Implied Volatility and the Implied Dividend Volatility - ResearchGate](https://www.researchgate.net/publication/356462920_The_Stock_Implied_Volatility_and_the_Implied_Dividend_Volatility)
-
 
 ```{python}
 #| include: false
