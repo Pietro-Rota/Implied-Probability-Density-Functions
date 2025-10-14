@@ -34,7 +34,7 @@ Implied volatility probability distributions (IVPD) are a way of understanding w
 
 The study of implied volatility distribution functions (IVDFs) forms a crucial bridge between derivatives pricing theory and the empirical analysis of market expectations and risk preferences. Formally, the IVDF is based on the Risk-Neutral Density (RND), representing the market’s expected distribution of the underlying asset price at a future expiration date, calculated under the risk-neutral measure $\mathbb Q$.
 
-## Research questions
+# Research questions
 
 1. Do pre-event distributions contain predictive information about post-event realized outcomes?
 2. Can post-event distributional shifts forecast subsequent market behavior?
@@ -63,9 +63,7 @@ The most important feature of this distribution is where the distribution is cen
 
 - Move the peak of the distribution, indicating a change in the direction of the expected price.
 
-## Proof of concept
-
-**Data sources**
+Data sources:
 
 - Bloomberg: for option data
   - Real time pricing for securities plus extensive historical records even for Option chains.
@@ -82,17 +80,19 @@ from scipy.optimize import brentq
 import plotly.graph_objects as go
 # import plotly as plo
 # plo.renderers.default = "notebook_connected"  # or "iframe"
+from scipy import stats
 
 from plotly.subplots import make_subplots
 from datetime import datetime
 import matplotlib.pyplot as plt
 
 import plotly.graph_objects as go
-import matplotlib.pyplot as plt
 
 import time
 import random
 ```
+
+Math:
 
 The core concept is based on Breeden and Litzenberger (1978), who showed that the second derivative of a European call price with respect to strike gives the risk-neutral PDF of the underlying asset price at maturity:
 $$
@@ -394,7 +394,6 @@ r = 0.04
 print(f"Fetching option chain data for {TICKER}...")
 
 from pathlib import Path
-
 file_path = Path("C:\\Users\\pietr\\OneDrive - City St George's, University of London\\Documents\\a2025-2026 BAYES\\Implied_Probability_Density_Functions\\AAPL_option_chain.xlsx")
 
 options_df = pd.read_excel(file_path)
@@ -421,6 +420,336 @@ create_ipdf_overlay(options_df, current_price, ticker="AAPL")
 create_mode_and_quartiles(options_df, current_price, ticker="AAPL")
 ```
 
+```{python}
+from scipy.stats import skew 
+from scipy.stats import kurtosis 
+
+expirations = sorted(options_df['expiration'].unique())
+
+# Prepare data for surface plot
+price_ranges = []
+pdfs_matrix = []
+exp_labels = []
+skew_df = []
+kurtosis_df = []
+
+for exp in expirations:  
+    exp_data = options_df[options_df['expiration'] == exp]
+    days_to_exp = exp_data['days_to_exp'].iloc[0]
+    
+    # Use ATM option IV as reference
+    atm_option = exp_data.iloc[(exp_data['strike'] - current_price).abs().argsort()[:1]]
+    if len(atm_option) > 0:
+        iv = atm_option['impliedVolatility'].iloc[0]
+        
+        price_range, pdf = calculate_probability_distribution(
+            current_price, current_price, iv, days_to_exp
+        )
+        if price_range is not None:
+                price_ranges.append(price_range)
+                pdfs_matrix.append(pdf)
+                skew_df.append(skew(pdf))
+                kurtosis_df.append(kurtosis(pdf))
+                exp_labels.append(f"{exp.strftime('%y-%m')} ({days_to_exp}d)")
+
+plt.clf()
+fig, ax = plt.subplots(figsize=(12, 7))
+ax.bar(range(len(options_df['expiration'].unique())), height = skew_df, color = "#ff7f0e")
+ax.set_xticks(range(len(options_df['expiration'].unique())))
+ax.set_xticklabels(exp_labels, rotation=45, ha='right')
+plt.tight_layout()
+```
+
+```{python}
+plt.clf()
+fig, ax = plt.subplots(figsize=(12, 7))
+ax.bar(range(len(options_df['expiration'].unique())), height = skew_df)
+ax.set_xticks(range(len(options_df['expiration'].unique())))
+ax.set_xticklabels(exp_labels, rotation=45, ha='right')
+plt.tight_layout()
+```
+
+```{python}
+#| include : false
+#| label: try_mat3d
+from mpl_toolkits import mplot3d
+import numpy as np
+import matplotlib.pyplot as plt
+
+def f(x,y):
+    return np.sin(np.sqrt(x**2+y**2))
+
+x = np.linspace(-6,6,30)
+y = np.linspace(-6,6,30)
+
+X, Y = np.meshgrid(x,y)
+Z=f(X,Y)
+fig = plt.figure()
+ax = plt.axes(projection="3d")
+ax.plot_surface(X, Y, Z, cmap ="viridis")
+plt.show()
+
+# X, Y = np.meshgrid(price_ranges, np.repeat(np.arange(1, 20), 200))
+# fig = plt.figure()
+# ax = plt.axes(projection="3d")
+# ax.plot_wireframe(X, Y, np.array(pdfs_matrix), color = "blue") #X, Y, Z
+# plt.show()
+
+
+# #  x=price_ranges[0]
+# #  y=list(range(len(exp_labels)))
+# #  z=pdfs_matrix
+```
+
+# Skew analysis
+
+```{python}
+#| label: skew_analysis
+df = options_df
+# Define your event date
+EVENT_DATE = pd.to_datetime('2025-12-15')  # Apple earnings
+
+# Convert date columns to datetime
+
+# Find suitable expirations around event date
+
+df_analysis = df
+
+suitable_expirations = df_analysis["expiration"].unique()
+
+print(f"Suitable expirations on event date:")
+for exp in suitable_expirations:
+    dte = (exp - EVENT_DATE).days
+    print(f"  {exp.strftime('%Y-%m-%d')} ({dte} days)")
+
+# # Select the expiration (choose one closest to 45 days)
+# SELECTED_EXPIRATION = (suitable_expirations)[0]  # Adjust based on output
+# print(f"\nSelected expiration: {SELECTED_EXPIRATION}")
+
+# # Filter data to this expiration only
+# df_analysis = df[df['expiration'] == SELECTED_EXPIRATION].copy()
+
+print(f"\nAnalysis dataset: {len(df_analysis)} rows")
+
+a = pd.Series(df['days_to_exp'].unique() <= 60, name='lower')
+b = pd.Series(df['days_to_exp'].unique() >= 10, name='higher')
+c = pd.Series(df["days_to_exp"].unique(),  name='date')
+d = a & b
+res = pd.concat([c, a, b, d], axis=1)
+
+with pd.option_context('display.max_rows', None, 'display.max_columns', None):
+    print(res)
+```
+
+```{python}
+#| label: ATM_skew
+def calculate_atm_skew(group):
+    """
+    Calculate ATM skew as: IV(90% moneyness) - IV(110% moneyness)
+    """
+    if len(group) < 5:
+        return np.nan
+    
+    # Sort by moneyness
+    group = group.sort_values('moneyness')
+    
+    # Interpolate IV at 90% and 110% moneyness
+    from scipy.interpolate import interp1d
+    
+    try:
+        # Remove duplicates and NaNs
+        clean_group = group.dropna(subset=['moneyness', 'impliedVolatility'])
+        clean_group = clean_group.drop_duplicates(subset=['moneyness'])
+        
+        if len(clean_group) < 3:
+            return np.nan
+        
+        f = interp1d(
+            clean_group['moneyness'], 
+            clean_group['impliedVolatility'],
+            kind='linear',
+            fill_value='extrapolate'
+        )
+        
+        iv_90 = f(0.90)
+        iv_110 = f(1.10)
+        
+        return float(iv_90 - iv_110)
+    except:
+        return np.nan
+
+# Calculate for each date
+skew_timeseries = df_analysis.groupby('expiration').apply(calculate_atm_skew, include_groups=False)
+skew_timeseries = skew_timeseries.reset_index()
+skew_timeseries.columns = ['expiration', 'atm_skew']
+```
+
+```{python}
+#| label: Risk_reversal
+def calculate_risk_reversal(group, put_moneyness=0.90, call_moneyness=1.10):
+    """
+    Risk Reversal = IV(OTM Put) - IV(OTM Call)
+    """
+    if len(group) < 5:
+        return np.nan
+    
+    try:
+        from scipy.interpolate import interp1d
+        
+        # Separate puts and calls
+        puts = group[group['type'] == 'put'].drop_duplicates('moneyness')
+        calls = group[group['type'] == 'call'].drop_duplicates('moneyness')
+        
+        if len(puts) < 2 or len(calls) < 2:
+            return np.nan
+        
+        # Interpolate
+        f_put = interp1d(puts['moneyness'], puts['impliedVolatility'], 
+                        kind='linear', fill_value='extrapolate')
+        f_call = interp1d(calls['moneyness'], calls['impliedVolatility'],
+                         kind='linear', fill_value='extrapolate')
+        
+        iv_put = f_put(put_moneyness)
+        iv_call = f_call(call_moneyness)
+        
+        return float(iv_put - iv_call)
+    except:
+        return np.nan
+
+# Calculate
+skew_timeseries['risk_reversal'] = np.array(df_analysis.groupby('expiration').apply(calculate_risk_reversal, include_groups=False))
+
+```
+
+```{python}
+#| label: Polynomial_Skew
+def calculate_polynomial_skew(group):
+    """
+    Fit: IV = a + b*(K/S - 1) + c*(K/S - 1)^2
+    Skew coefficient = b (linear term)
+    """
+    if len(group) < 10:
+        return np.nan
+    
+    # Calculate relative strike (K/S - 1)
+    group = group.dropna(subset=['moneyness', 'impliedVolatility'])
+    X = group['moneyness'] - 1.0
+    y = group['impliedVolatility']
+    
+    # Fit polynomial
+    coeffs = np.polyfit(X, y, deg=2)
+    
+    # Return linear coefficient (skew)
+    return coeffs[1]
+
+skew_timeseries['poly_skew'] = np.array(df_analysis.groupby('expiration').apply(calculate_polynomial_skew, include_groups=False))
+skew_timeseries
+```
+
+```{python}
+#| include : false
+# Define windows (30 days before and after)
+PRE_WINDOW_START = EVENT_DATE - pd.Timedelta(days=30)
+PRE_WINDOW_END = EVENT_DATE - pd.Timedelta(days=1)
+POST_WINDOW_START = EVENT_DATE
+POST_WINDOW_END = EVENT_DATE + pd.Timedelta(days=30)
+
+# Extract windows
+pre_event = skew_timeseries[
+    (skew_timeseries['expiration'] >= PRE_WINDOW_START) &
+    (skew_timeseries['expiration'] <= PRE_WINDOW_END)
+].copy()
+
+post_event = skew_timeseries[
+    (skew_timeseries['expiration'] >= POST_WINDOW_START) &
+    (skew_timeseries['expiration'] <= POST_WINDOW_END)
+].copy()
+
+print(f"\n=== EVENT WINDOWS ===")
+print(f"Pre-event observations: {len(pre_event)}")
+print(f"Post-event observations: {len(post_event)}")
+
+# Mark windows in main dataframe
+skew_timeseries['window'] = 'other'
+skew_timeseries.loc[skew_timeseries['expiration'].isin(pre_event['expiration']), 'window'] = 'pre'
+skew_timeseries.loc[skew_timeseries['expiration'].isin(post_event['expiration']), 'window'] = 'post'
+```
+
+```{python}
+#| include : false
+def perform_ttest(metric_name):
+    """
+    Perform t-test comparing pre vs post event
+    """
+    pre_data = pre_event[metric_name].dropna()
+    post_data = post_event[metric_name].dropna()
+    
+    if len(pre_data) < 2 or len(post_data) < 2:
+        print(f"⚠️  Insufficient data for {metric_name}")
+        return None
+    
+    # Calculate statistics
+    pre_mean = pre_data.mean()
+    post_mean = post_data.mean()
+    change = post_mean - pre_mean
+    pct_change = (change / abs(pre_mean)) * 100 if pre_mean != 0 else np.nan
+    
+    # T-test (two-tailed)
+    t_stat, p_value = stats.ttest_ind(pre_data, post_data)
+    
+    # Effect size (Cohen's d)
+    pooled_std = np.sqrt(((len(pre_data)-1)*pre_data.std()**2 + 
+                          (len(post_data)-1)*post_data.std()**2) / 
+                         (len(pre_data) + len(post_data) - 2))
+    cohens_d = change / pooled_std if pooled_std > 0 else np.nan
+    
+    results = {
+        'metric': metric_name,
+        'pre_mean': pre_mean,
+        'post_mean': post_mean,
+        'change': change,
+        'pct_change': pct_change,
+        't_statistic': t_stat,
+        'p_value': p_value,
+        'cohens_d': cohens_d,
+        'significant_01': p_value < 0.01,
+        'significant_05': p_value < 0.05,
+        'significant_10': p_value < 0.10
+    }
+    
+    return results
+
+# Test all metrics
+metrics_to_test = ['atm_skew', 'risk_reversal', 'poly_skew']
+test_results = []
+
+print("\n" + "="*80)
+print("HYPOTHESIS TESTING RESULTS: Apple Earnings Event")
+print("="*80)
+
+for metric in metrics_to_test:
+    result = perform_ttest(metric)
+    if result:
+        test_results.append(result)
+        
+        # Print formatted result
+        sig_stars = "***" if result['significant_01'] else \
+                   "**" if result['significant_05'] else \
+                   "*" if result['significant_10'] else ""
+        
+        print(f"\n{result['metric'].upper().replace('_', ' ')}")
+        print(f"  Pre-event mean:  {result['pre_mean']:>8.4f}")
+        print(f"  Post-event mean: {result['post_mean']:>8.4f}")
+        print(f"  Change:          {result['change']:>8.4f} ({result['pct_change']:>6.2f}%)")
+        print(f"  t-statistic:     {result['t_statistic']:>8.4f}")
+        print(f"  p-value:         {result['p_value']:>8.4f} {sig_stars}")
+        print(f"  Cohen's d:       {result['cohens_d']:>8.4f}")
+
+# Save results
+results_df = pd.DataFrame(test_results)
+results_df
+```
+
 ## Sitography
 
 1. [A New Nonparametric Estimate of the Risk-Neutral Density with Applications to Variance Swaps - Frontiers](https://www.frontiersin.org/journals/applied-mathematics-and-statistics/articles/10.3389/fams.2020.611878/full)
@@ -444,7 +773,7 @@ create_mode_and_quartiles(options_df, current_price, ticker="AAPL")
 
 ```{python}
 #| include: false
-#| label: final beep
+#| label: final_beep
 import pygame
 pygame.mixer.init()
 pygame.mixer.Sound("C:/Offline_Projects/beep.mp3").play()
