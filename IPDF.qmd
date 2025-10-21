@@ -1,5 +1,6 @@
 ---
 title: "The Structural Dynamics of Option-Implied Probability Distributions – Theoretical Foundations and Advanced Research Directions"
+date-modified: last-modified
 author:
   - name: Pietro Rota
     affiliation:
@@ -8,10 +9,13 @@ author:
         state: UK
         url: https://www.bayes.citystgeorges.ac.uk/
 jupyter: python3
-
+theme: 
+  - cosmo
+  - styles.scss
 format:
   html:
     toc: true
+    toc-depth: 2
     code-tools: true
     code-fold: true
     code-summary: "Show code"
@@ -20,6 +24,12 @@ format:
     code-block-bg: true
     font-family: system-ui
     self-contained: true
+    other-links: 
+      - text: Linkedin
+        href: https://www.linkedin.com/in/pietro-rota-37aa21252/
+      - text: Github
+        href: https://github.com/Pietro-Rota/
+
     # mathjax: "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
     html-math-method: katex
 
@@ -33,6 +43,7 @@ execute:
 Implied volatility probability distributions (IVPD) are a way of understanding what the market is expecting regarding the future price of an asset (both stocks, indexes and ETFs) based on the price of options available. showing the whole distribution of probabilities and the associated strike prices, essentially what is the most probable price for the future.
 
 The study of implied volatility distribution functions (IVDFs) forms a crucial bridge between derivatives pricing theory and the empirical analysis of market expectations and risk preferences. Formally, the IVDF is based on the Risk-Neutral Density (RND), representing the market’s expected distribution of the underlying asset price at a future expiration date, calculated under the risk-neutral measure $\mathbb Q$.
+
 
 # Research questions
 
@@ -53,7 +64,7 @@ Probability distribution: Using these implied volatilities for the entire option
 
 The most important feature of this distribution is where the distribution is centered in term of the strike value, symmetric compared to the current price, is the market expecting a price rise or a fall. If instead the distribution is asymmetrical (skewed) indica una maggiore probabilità di movimenti in una direzione (es. più probabile un calo che un rialzo).
 
-"Fat Tails": Se le code della distribuzione sono più "pesanti" del normale, significa che il mercato attribuisce una probabilità maggiore a eventi estremi (grandi rialzi o grandi crolli) rispetto a quanto previsto da un modello standard.
+"Fat Tails": If the tails of the distribution become heavier than normal, it means that the market attribuites a bigger probability to extreme events (either big rallies or crashes) more than what would be otherwise expected.
 
 3D Changes in time: once you have one distribution for one maturity date you can look at how these distributions change over time 3d view
 
@@ -70,8 +81,13 @@ Data sources:
 - Factiva:
   - Easy to see how the news are impacting certain sceurities, seeing when the news hit is crucial for understainding where the actual market came to a consensus on the impact of the event.
 
+**Generally I would like to focus on:**
+Macro Shocks (Tariffs/ChatGPT): These are rare, systemic events. Your innovation is in the comparative framework. The market's reaction to tariffs (a policy shock) likely has a different IVPDF signature—perhaps increasing left-tail risk (crash fear)—compared to the reaction to a technological breakthrough like ChatGPT, which might increase right-tail risk (growth optimism).
+
 ```{python}
 #| label: import 
+from mpl_toolkits import mplot3d
+from mpl_toolkits.mplot3d import Axes3D
 import yfinance as yf
 import numpy as np
 import pandas as pd
@@ -90,6 +106,7 @@ import plotly.graph_objects as go
 
 import time
 import random
+print("Current Time:", datetime.now())
 ```
 
 Math:
@@ -204,9 +221,24 @@ def get_option_chain_data(ticker_symbol):
     
     return options_df, current_price
 
-def create_3d_ipdf_surface(options_df, current_price, ticker = "IDK"):
+def create_3d_ipdf_surface(options_df, current_price, ticker="IDK", backend="plotly"):
     """
     Create 3D surface plot showing how IPDF changes across strikes and expirations
+    
+    Parameters:
+    -----------
+    options_df : DataFrame
+        Options data with columns: expiration, days_to_exp, strike, impliedVolatility
+    current_price : float
+        Current underlying price
+    ticker : str
+        Ticker symbol for plot title
+    backend : str
+        Either "plotly" or "matplotlib" for rendering backend
+    
+    Returns:
+    --------
+    Plotly Figure or Matplotlib Figure depending on backend
     """
     # Group by expiration
     expirations = sorted(options_df['expiration'].unique())
@@ -234,19 +266,28 @@ def create_3d_ipdf_surface(options_df, current_price, ticker = "IDK"):
                 pdfs_matrix.append(pdf)
                 exp_labels.append(f"{exp.strftime('%y-%m')} ({days_to_exp}d)")
     
-    # Create meshgrid for 3D plot
-    if len(price_ranges) > 0:
+    # Return None if no valid data
+    if len(price_ranges) == 0:
+        return None
+    
+    # Convert to numpy arrays for both backends
+    X = np.array(price_ranges[0])
+    Y = np.arange(len(exp_labels))
+    Z = np.array(pdfs_matrix)
+    
+    if backend.lower() == "plotly":
+        # Create Plotly surface plot
         fig = go.Figure(data=[go.Surface(
-            x=price_ranges[0],
-            y=list(range(len(exp_labels))),
-            z=pdfs_matrix,
+            x=X,
+            y=Y,
+            z=Z,
             colorscale='Viridis',
             opacity=0.8,
             name='Probability Density'
         )])
         
         fig.update_layout(
-            title= f'3D Implied Probability Distribution - Full Option Chain for {ticker}',
+            title=f'3D Implied Probability Distribution - Full Option Chain for {ticker}',
             scene=dict(
                 xaxis_title='Strike Price',
                 yaxis=dict(
@@ -261,7 +302,43 @@ def create_3d_ipdf_surface(options_df, current_price, ticker = "IDK"):
         )
         
         return fig
-    return None
+    
+    elif backend.lower() == "matplotlib":
+        # Create Matplotlib 3D surface plot
+        fig = plt.figure(figsize=(15, 10))
+        ax = fig.add_subplot(111, projection='3d')
+        
+        # Create meshgrid for surface
+        X_mesh, Y_mesh = np.meshgrid(X, Y)
+        
+        # Plot surface
+        surf = ax.plot_surface(X_mesh, Y_mesh, Z, cmap='viridis', 
+                               alpha=0.8, edgecolor='none')
+        
+        # Add colorbar
+        fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5, label='Probability Density')
+        
+        # Set labels and title
+        ax.set_xlabel('Strike Price', labelpad=10)
+        ax.set_ylabel('Expiration', labelpad=10)
+        ax.set_zlabel('Probability Density', labelpad=10)
+        ax.set_title(f'3D Implied Probability Distribution - Full Option Chain for {ticker}', 
+                     pad=20, fontsize=12, fontweight='bold')
+        
+        # Set y-axis ticks to show expiration labels
+        # Option 1: Show fewer labels (every nth label)
+        skip = max(1, len(Y) // 8)  # Show ~8 labels max
+        ax.set_yticks(Y[::skip])
+        ax.set_yticklabels([exp_labels[i] for i in range(0, len(exp_labels), skip)], 
+                          rotation=0, va='top', fontsize=8)
+        
+        # Set viewing angle
+        ax.view_init(elev=25, azim=45)
+        plt.close(fig)
+        return fig
+    
+    else:
+        raise ValueError(f"Unknown backend: {backend}. Use 'plotly' or 'matplotlib'")
 
 def create_ipdf_overlay(options_df, current_price, ticker = "IDK"):
     """
@@ -405,16 +482,24 @@ print(f"Expirations available: {len(options_df['expiration'].unique())}")
 options_df[["contractSymbol", "strike", "lastPrice", "bid", "ask", "change", "impliedVolatility", "inTheMoney", "type", "expiration", "days_to_exp"]]
 ```
 
+Create-3d-visualizations
+
 ```{python}
 #| label: Create-3d-visualizations
-create_3d_ipdf_surface(options_df, current_price, ticker="AAPL")
+create_3d_ipdf_surface(options_df, current_price, ticker="AAPL", backend="plotly")
 ```
 
+```{python}
+create_3d_ipdf_surface(options_df, current_price, ticker="AAPL", backend = "matplotlib")
+```
+
+Overlay sigma K
 ```{python}
 #| label: create-overlay-visualizations
 create_ipdf_overlay(options_df, current_price, ticker="AAPL")
 ```
 
+Overlay K maturity
 ```{python}
 #| label: Create-time-strike-visualization
 create_mode_and_quartiles(options_df, current_price, ticker="AAPL")
@@ -452,53 +537,17 @@ for exp in expirations:
                 kurtosis_df.append(kurtosis(pdf))
                 exp_labels.append(f"{exp.strftime('%y-%m')} ({days_to_exp}d)")
 
-plt.clf()
-fig, ax = plt.subplots(figsize=(12, 7))
-ax.bar(range(len(options_df['expiration'].unique())), height = skew_df, color = "#ff7f0e")
-ax.set_xticks(range(len(options_df['expiration'].unique())))
-ax.set_xticklabels(exp_labels, rotation=45, ha='right')
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+ax1.bar(range(len(options_df['expiration'].unique())), height = skew_df, color = "#ff7f0e")
+ax1.set_title("Skew of the entire chain")
+ax1.set_xticks(range(len(options_df['expiration'].unique())))
+ax1.set_xticklabels(exp_labels, rotation=45, ha='right')
+
+ax2.bar(range(len(options_df['expiration'].unique())), height = kurtosis_df)
+ax2.set_xticks(range(len(options_df['expiration'].unique())))
+ax2.set_title("Kurtosis of the entire chain")
+ax2.set_xticklabels(exp_labels, rotation=45, ha='right')
 plt.tight_layout()
-```
-
-```{python}
-plt.clf()
-fig, ax = plt.subplots(figsize=(12, 7))
-ax.bar(range(len(options_df['expiration'].unique())), height = skew_df)
-ax.set_xticks(range(len(options_df['expiration'].unique())))
-ax.set_xticklabels(exp_labels, rotation=45, ha='right')
-plt.tight_layout()
-```
-
-```{python}
-#| include : false
-#| label: try_mat3d
-from mpl_toolkits import mplot3d
-import numpy as np
-import matplotlib.pyplot as plt
-
-def f(x,y):
-    return np.sin(np.sqrt(x**2+y**2))
-
-x = np.linspace(-6,6,30)
-y = np.linspace(-6,6,30)
-
-X, Y = np.meshgrid(x,y)
-Z=f(X,Y)
-fig = plt.figure()
-ax = plt.axes(projection="3d")
-ax.plot_surface(X, Y, Z, cmap ="viridis")
-plt.show()
-
-# X, Y = np.meshgrid(price_ranges, np.repeat(np.arange(1, 20), 200))
-# fig = plt.figure()
-# ax = plt.axes(projection="3d")
-# ax.plot_wireframe(X, Y, np.array(pdfs_matrix), color = "blue") #X, Y, Z
-# plt.show()
-
-
-# #  x=price_ranges[0]
-# #  y=list(range(len(exp_labels)))
-# #  z=pdfs_matrix
 ```
 
 # Skew analysis
@@ -585,68 +634,6 @@ skew_timeseries.columns = ['expiration', 'atm_skew']
 ```
 
 ```{python}
-#| label: Risk_reversal
-def calculate_risk_reversal(group, put_moneyness=0.90, call_moneyness=1.10):
-    """
-    Risk Reversal = IV(OTM Put) - IV(OTM Call)
-    """
-    if len(group) < 5:
-        return np.nan
-    
-    try:
-        from scipy.interpolate import interp1d
-        
-        # Separate puts and calls
-        puts = group[group['type'] == 'put'].drop_duplicates('moneyness')
-        calls = group[group['type'] == 'call'].drop_duplicates('moneyness')
-        
-        if len(puts) < 2 or len(calls) < 2:
-            return np.nan
-        
-        # Interpolate
-        f_put = interp1d(puts['moneyness'], puts['impliedVolatility'], 
-                        kind='linear', fill_value='extrapolate')
-        f_call = interp1d(calls['moneyness'], calls['impliedVolatility'],
-                         kind='linear', fill_value='extrapolate')
-        
-        iv_put = f_put(put_moneyness)
-        iv_call = f_call(call_moneyness)
-        
-        return float(iv_put - iv_call)
-    except:
-        return np.nan
-
-# Calculate
-skew_timeseries['risk_reversal'] = np.array(df_analysis.groupby('expiration').apply(calculate_risk_reversal, include_groups=False))
-
-```
-
-```{python}
-#| label: Polynomial_Skew
-def calculate_polynomial_skew(group):
-    """
-    Fit: IV = a + b*(K/S - 1) + c*(K/S - 1)^2
-    Skew coefficient = b (linear term)
-    """
-    if len(group) < 10:
-        return np.nan
-    
-    # Calculate relative strike (K/S - 1)
-    group = group.dropna(subset=['moneyness', 'impliedVolatility'])
-    X = group['moneyness'] - 1.0
-    y = group['impliedVolatility']
-    
-    # Fit polynomial
-    coeffs = np.polyfit(X, y, deg=2)
-    
-    # Return linear coefficient (skew)
-    return coeffs[1]
-
-skew_timeseries['poly_skew'] = np.array(df_analysis.groupby('expiration').apply(calculate_polynomial_skew, include_groups=False))
-skew_timeseries
-```
-
-```{python}
 #| include : false
 # Define windows (30 days before and after)
 PRE_WINDOW_START = EVENT_DATE - pd.Timedelta(days=30)
@@ -720,7 +707,7 @@ def perform_ttest(metric_name):
     return results
 
 # Test all metrics
-metrics_to_test = ['atm_skew', 'risk_reversal', 'poly_skew']
+metrics_to_test = ['atm_skew']
 test_results = []
 
 print("\n" + "="*80)
@@ -750,6 +737,513 @@ results_df = pd.DataFrame(test_results)
 results_df
 ```
 
+# SJVD Bates model 
+
+```{python}
+#| include: false
+#| eval: false
+#| 
+import QuantLib as ql
+import numpy as np
+import matplotlib.pyplot as plt
+
+# -----------------------------
+# 1. SET PARAMETERS
+# -----------------------------
+# These are the "economically meaningful" parameters you mentioned.
+today = ql.Date(1, 1, 2023)
+ql.Settings.instance().evaluationDate = today
+
+maturity_date = today + ql.Period(1, ql.Years) # 1-year simulation
+risk_free_rate = 0.05  # r
+dividend_yield = 0.02  # q
+initial_spot_price = 100.0
+initial_variance = 0.09  # v0 (volatility = sqrt(0.09) = 30%)
+
+# Stochastic Volatility (Heston) Parameters
+kappa = 2.0    # Mean-reversion speed (κ). How fast volatility returns to its long-term level.
+theta = 0.09   # Long-run variance (θ). The level volatility reverts to.
+sigma = 0.4    # Volatility of volatility (σ). How volatile the volatility is.
+rho = -0.7     # Correlation (ρ). Typically negative (when price goes down, volatility goes up).
+
+# Jump Parameters (Merton)
+jump_intensity = 5.0  # λ (lambda). How often jumps happen per year (e.g., 5 times a year on average).
+jump_mean = -0.05     # μ_J. The average size of the jump. -0.05 = average 5% drop.
+jump_stddev = 0.10    # δ. The standard deviation of the jump size.
+
+# -----------------------------
+# 2. SET UP THE BATES MODEL
+# -----------------------------
+# Create the calendar and day counter
+calendar = ql.UnitedKingdom()  # CORRECTED: Remove the (m=1) parameter
+day_counter = ql.Actual365Fixed()
+
+# Create the spot curve (risk-free rate)
+spot_curve = ql.FlatForward(today, risk_free_rate, day_counter)
+spot_curve_handle = ql.YieldTermStructureHandle(spot_curve)
+
+# Create the dividend curve
+dividend_curve = ql.FlatForward(today, dividend_yield, day_counter)
+dividend_curve_handle = ql.YieldTermStructureHandle(dividend_curve)
+
+# Create the Bates process
+bates_process = ql.BatesProcess(spot_curve_handle,
+                                dividend_curve_handle,
+                                ql.QuoteHandle(ql.SimpleQuote(initial_spot_price)),
+                                initial_variance,
+                                kappa, theta, sigma, rho,
+                                jump_intensity, jump_mean, jump_stddev)
+
+# -----------------------------
+# 3. SIMULATE PATHS - CORRECTED VERSION
+# -----------------------------
+time_steps_per_year = 252  # Daily steps
+
+# CORRECTION: Create TimeGrid object first
+time_grid = ql.TimeGrid(1.0, time_steps_per_year)  # 1.0 year with daily steps
+
+# CORRECTION: Use the proper constructor with 3 arguments
+rng = ql.GaussianRandomSequenceGenerator(
+    ql.UniformRandomSequenceGenerator(
+        bates_process.factors() * (len(time_grid) - 1),  # Important: factors * (steps)
+        ql.UniformRandomGenerator()
+    )
+)
+
+# CORRECTION: Use 3-argument constructor
+seq = ql.GaussianMultiPathGenerator(bates_process, time_grid, rng)
+
+# Number of paths to simulate
+num_paths = 3
+paths = []
+for i in range(num_paths):
+    sample_path = seq.next()
+    path = sample_path.value()
+    # Extract the price path
+    price_path = [path[0][t] for t in range(len(path[0]))]
+    variance_path = [path[1][t] for t in range(len(path[1]))]
+    paths.append((price_path, variance_path))
+
+# -----------------------------
+# 4. VISUALIZE THE RESULTS
+# -----------------------------
+# Create time axis
+time_axis = np.linspace(0, 1, len(paths[0][0]))
+
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+
+# Plot the price path
+ax1.plot(time_axis, paths[0][1], linewidth=1)
+ax1.plot(time_axis, paths[1][1], linewidth=1)
+ax1.set_title('Simulated Stock Price Path using Bates (SVJD) Model')
+ax1.set_ylabel('Price')
+ax1.grid(True)
+
+# Mark any significant jumps (changes > 5% in one day)
+price_changes = np.diff(paths[0][0]) / paths[0][0][:-1]
+jump_indices = np.where(np.abs(price_changes) > 0.05)[0]
+for idx in jump_indices:
+    ax1.axvline(x=time_axis[idx+1], color='red', linestyle='--', alpha=0.7)
+
+# Plot the stochastic volatility path
+volatility_path = np.sqrt(np.maximum(paths[0][1], 0)) * 100  # Ensure positive, convert to %
+ax2.plot(time_axis, volatility_path, linewidth=1, color='orange')
+ax2.set_title('Stochastic Volatility Path')
+ax2.set_ylabel('Volatility (%)')
+ax2.set_xlabel('Time (Years)')
+ax2.grid(True)
+
+plt.tight_layout()
+plt.show()
+
+# Print some statistics
+print(f"Initial Price: {paths[0][0][0]:.2f}")
+print(f"Final Price: {paths[0][0][-1]:.2f}")
+print(f"Number of significant jumps (>5%): {len(jump_indices)}")
+print(f"Final Volatility: {volatility_path[-1]:.2f}%")
+```
+
+
+```{python}
+import numpy as np
+import matplotlib.pyplot as plt
+
+def simulate_bates_model(S0=100, T=1, dt=1/252, r=0.05, q=0.02, 
+                        v0=0.09, kappa=2.0, theta=0.09, sigma=0.4, rho=-0.7,
+                        lambd=5.0, mu_j=-0.05, delta_j=0.10, n_paths=1):
+    """
+    Simple Euler discretization of Bates (SVJD) model
+    """
+    n_steps = int(T/dt)
+    
+    # Initialize arrays
+    S = np.zeros((n_paths, n_steps))
+    v = np.zeros((n_paths, n_steps))
+    
+    S[:, 0] = S0
+    v[:, 0] = v0
+    
+    # Generate correlated Brownian motions
+    for i in range(n_paths):
+        for t in range(1, n_steps):
+            # Generate correlated random shocks
+            Z1 = np.random.normal()
+            Z2 = rho * Z1 + np.sqrt(1 - rho**2) * np.random.normal()
+            
+            # Stochastic volatility component
+            v[i, t] = v[i, t-1] + kappa * (theta - max(v[i, t-1], 0)) * dt + \
+                      sigma * np.sqrt(max(v[i, t-1], 0)) * np.sqrt(dt) * Z2
+            v[i, t] = max(v[i, t], 0)  # Ensure non-negative variance
+            
+            # Jump component
+            jump = 0
+            jump_prob = lambd * dt
+            if np.random.random() < jump_prob:
+                jump_size = np.random.normal(mu_j, delta_j)
+                jump = np.exp(jump_size) - 1
+            
+            # Stock price evolution
+            S[i, t] = S[i, t-1] * np.exp((r - q - 0.5 * max(v[i, t-1], 0)) * dt + 
+                                        np.sqrt(max(v[i, t-1], 0)) * np.sqrt(dt) * Z1 + jump)
+    
+    return S, v
+
+# Run simulation
+S, v = simulate_bates_model()
+
+# Plot results
+time_axis = np.linspace(0, 1, S.shape[1])
+plt.figure(figsize=(12, 6))
+plt.subplot(2, 1, 1)
+plt.plot(time_axis, S[0])
+plt.title('Bates Model Simulation')
+plt.ylabel('Price')
+plt.grid(True)
+
+plt.subplot(2, 1, 2)
+plt.plot(time_axis, np.sqrt(v[0]) * 100)
+plt.ylabel('Volatility (%)')
+plt.xlabel('Time (Years)')
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+```
+
+
+```{python}
+import numpy as np
+import pandas as pd
+from scipy.optimize import minimize
+from scipy.stats import norm
+import matplotlib.pyplot as plt
+
+class BatesPricer:
+    """Simplified Bates model option pricer for calibration"""
+    
+    @staticmethod
+    def heston_characteristic_function(u, T, S0, r, q, v0, kappa, theta, sigma, rho):
+        """Heston model characteristic function"""
+        # Simplified Heston characteristic function
+        # In practice, you'd use the full complex formulation
+        d = np.sqrt((rho * sigma * 1j * u - kappa)**2 + sigma**2 * (1j * u + u**2))
+        g = (kappa - rho * sigma * 1j * u - d) / (kappa - rho * sigma * 1j * u + d)
+        C = kappa * (theta * T - (2/sigma**2) * np.log((1 - g * np.exp(-d * T))/(1 - g)))
+        D = ((kappa - rho * sigma * 1j * u - d) / sigma**2) * ((1 - np.exp(-d * T))/(1 - g * np.exp(-d * T)))
+        
+        return np.exp(1j * u * np.log(S0) + C + D * v0 + 1j * u * (r - q) * T)
+    
+    @staticmethod
+    def bates_approximation(S0, K, T, r, q, v0, kappa, theta, sigma, rho, lambd, mu_j, delta_j):
+        """
+        Approximate Bates model price using volatility adjustment
+        This is a practical approximation for calibration purposes
+        """
+        # Total variance including jump component
+        jump_variance = lambd * (mu_j**2 + delta_j**2)
+        total_variance = theta + jump_variance
+        
+        # Adjust for mean jump size effect
+        jump_adjustment = lambd * (np.exp(mu_j + 0.5 * delta_j**2) - 1)
+        
+        # Effective parameters for Black-Scholes approximation
+        effective_vol = np.sqrt(total_variance)
+        effective_r = r - jump_adjustment
+        
+        # Black-Scholes with adjusted parameters
+        d1 = (np.log(S0/K) + (effective_r - q + 0.5 * effective_vol**2) * T) / (effective_vol * np.sqrt(T))
+        d2 = d1 - effective_vol * np.sqrt(T)
+        
+        call_price = S0 * np.exp(-q * T) * norm.cdf(d1) - K * np.exp(-effective_r * T) * norm.cdf(d2)
+        return max(call_price, 0.01)  # Ensure positive price
+    
+    @staticmethod
+    def black_scholes(S0, K, T, r, q, sigma):
+        """Standard Black-Scholes formula"""
+        d1 = (np.log(S0/K) + (r - q + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+        d2 = d1 - sigma * np.sqrt(T)
+        call_price = S0 * np.exp(-q * T) * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2)
+        return call_price
+
+def bates_model_objective(params, market_prices, strikes, days_to_exp, S0, r, q):
+    """
+    Objective function for Bates model calibration
+    """
+    v0, kappa, theta, sigma, rho, lambd, mu_j, delta_j = params
+    
+    total_error = 0.0
+    valid_points = 0
+    
+    for i, (market_price, K, T) in enumerate(zip(market_prices, strikes, days_to_exp)):
+        if market_price > 0.01:  # Only use liquid options
+            # Calculate Bates model price
+            model_price = BatesPricer.bates_approximation(S0, K, T, r, q, v0, kappa, theta, sigma, rho, lambd, mu_j, delta_j)
+            
+            # Relative squared error (better for options with different prices)
+            error = ((market_price - model_price) / market_price) ** 2
+            total_error += error
+            valid_points += 1
+    
+    # Add regularization to prevent extreme parameters
+    regularization = 0.01 * (
+        (kappa - 2.0)**2 + (theta - 0.04)**2 + (lambd - 1.0)**2 + 
+        (mu_j + 0.05)**2 + (rho + 0.7)**2
+    )
+    
+    return total_error / valid_points + regularization if valid_points > 0 else 1e6
+
+def calibrate_bates_from_chain(option_chain, S0, r, q):
+    """
+    Calibrate Bates parameters from an option chain
+    """
+    print("Starting Bates model calibration...")
+    
+    # Extract data from option chain
+    strikes = option_chain['strike'].values
+    market_prices = option_chain['mid_price'].values
+    days_to_exp = option_chain['days_to_exp'].values
+    
+    # Initial parameter guesses (sensible defaults)
+    initial_guess = [
+        0.04,    # v0: initial variance (20% vol)
+        2.0,     # kappa: mean-reversion speed
+        0.04,    # theta: long-term variance (20% vol)
+        0.3,     # sigma: vol of vol
+        -0.7,    # rho: correlation
+        1.0,     # lambda: jump intensity
+        -0.05,   # mu_j: mean jump size
+        0.10     # delta_j: jump volatility
+    ]
+    
+    # Parameter bounds (to ensure reasonable values)
+    bounds = [
+        (0.01, 0.5),    # v0
+        (0.1, 10.0),    # kappa
+        (0.01, 0.5),    # theta
+        (0.1, 1.0),     # sigma
+        (-0.99, 0.0),   # rho (typically negative)
+        (0.1, 20.0),    # lambda
+        (-0.3, 0.3),    # mu_j (can be positive or negative)
+        (0.05, 0.5)     # delta_j
+    ]
+    
+    # Perform optimization
+    result = minimize(
+        bates_model_objective,
+        initial_guess,
+        args=(market_prices, strikes, days_to_exp, S0, r, q),
+        bounds=bounds,
+        method='L-BFGS-B',
+        options={'maxiter': 100, 'disp': True}
+    )
+    
+    return result
+
+def create_sample_option_chain(S0=100, r=0.05, q=0.02, T=0.1):
+    """
+    Create a realistic sample option chain for testing
+    """
+    # Create strikes around current price
+    strikes = np.array([80, 85, 90, 95, 100, 105, 110, 115, 120])
+    
+    # True Bates parameters to generate "market" prices
+    true_params = [0.04, 2.0, 0.04, 0.3, -0.7, 2.0, -0.08, 0.15]
+    v0, kappa, theta, sigma, rho, lambd, mu_j, delta_j = true_params
+    
+    # Generate market prices with some noise
+    market_prices = []
+    for K in strikes:
+        true_price = BatesPricer.bates_approximation(S0, K, T, r, q, v0, kappa, theta, sigma, rho, lambd, mu_j, delta_j)
+        # Add small random noise to simulate real market
+        noisy_price = true_price * np.random.uniform(0.98, 1.02)
+        market_prices.append(max(noisy_price, 0.01))
+    
+    option_chain = pd.DataFrame({
+        'strike': strikes,
+        'bid': [p * 0.99 for p in market_prices],  # Simulate bid-ask spread
+        'ask': [p * 1.01 for p in market_prices],
+        'days_to_exp': [T] * len(strikes)
+    })
+    option_chain['mid_price'] = (option_chain['bid'] + option_chain['ask']) / 2
+    
+    return option_chain, true_params
+
+def plot_calibration_results(option_chain, S0, r, q, calibrated_params, true_params=None):
+    """Plot market prices vs calibrated model prices"""
+    strikes = option_chain['strike'].values
+    market_prices = option_chain['mid_price'].values
+    T = option_chain['days_to_exp'].iloc[0]
+    
+    # Calculate model prices with calibrated parameters
+    model_prices = []
+    for K in strikes:
+        price = BatesPricer.bates_approximation(S0, K, T, r, q, *calibrated_params)
+        model_prices.append(price)
+    
+    # Calculate true prices if available
+    true_prices = []
+    if true_params is not None:
+        for K in strikes:
+            price = BatesPricer.bates_approximation(S0, K, T, r, q, *true_params)
+            true_prices.append(price)
+    
+    plt.figure(figsize=(12, 8))
+    
+    # Plot prices
+    plt.subplot(2, 1, 1)
+    plt.plot(strikes, market_prices, 'bo-', label='Market Prices', linewidth=2, markersize=6)
+    plt.plot(strikes, model_prices, 'ro--', label='Calibrated Bates Model', linewidth=2, markersize=6)
+    
+    if true_params is not None:
+        plt.plot(strikes, true_prices, 'g--', label='True Bates Model', linewidth=2, alpha=0.7)
+    
+    plt.axvline(S0, color='k', linestyle='--', alpha=0.5, label='Spot Price')
+    plt.xlabel('Strike Price')
+    plt.ylabel('Option Price')
+    plt.title('Bates Model Calibration Results')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # Plot errors
+    plt.subplot(2, 1, 2)
+    errors = (np.array(model_prices) - market_prices) / market_prices * 100
+    plt.bar(strikes, errors, alpha=0.7, color='orange')
+    plt.axhline(0, color='k', linestyle='-')
+    plt.xlabel('Strike Price')
+    plt.ylabel('Pricing Error (%)')
+    plt.title('Calibration Errors')
+    plt.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.show()
+
+def example_calibration():
+    """Complete working example of Bates model calibration"""
+    print("=== BATES MODEL CALIBRATION EXAMPLE ===")
+    
+    # Parameters
+    S0 = 100.0
+    r = 0.05
+    q = 0.02
+    
+    # Create sample option chain
+    option_chain, true_params = create_sample_option_chain(S0, r, q)
+    
+    print("Sample Option Chain:")
+    print(option_chain[['strike', 'mid_price']].to_string(index=False))
+    
+    # Perform calibration
+    result = calibrate_bates_from_chain(option_chain, S0, r, q)
+    
+    if result.success:
+        calibrated_params = result.x
+        param_names = ['v0', 'kappa', 'theta', 'sigma', 'rho', 'lambda', 'mu_j', 'delta_j']
+        
+        print("\n" + "="*50)
+        print("CALIBRATION RESULTS:")
+        print("="*50)
+        
+        # Print comparison if we know true parameters
+        if true_params is not None:
+            print(f"{'Parameter':<10} {'True':<8} {'Calibrated':<12} {'Error':<8}")
+            print("-" * 45)
+            for name, true, calib in zip(param_names, true_params, calibrated_params):
+                error_pct = (calib - true) / true * 100
+                print(f"{name:<10} {true:<8.4f} {calib:<12.4f} {error_pct:<8.1f}%")
+        else:
+            for name, value in zip(param_names, calibrated_params):
+                print(f"{name:<10}: {value:.4f}")
+        
+        # Plot results
+        plot_calibration_results(option_chain, S0, r, q, calibrated_params, true_params)
+        
+        # Economic interpretation
+        print("\n" + "="*50)
+        print("ECONOMIC INTERPRETATION:")
+        print("="*50)
+        v0, kappa, theta, sigma, rho, lambd, mu_j, delta_j = calibrated_params
+        print(f"• Initial Volatility: {np.sqrt(v0)*100:.1f}%")
+        print(f"• Long-run Volatility: {np.sqrt(theta)*100:.1f}%")  
+        print(f"• Vol Mean-reversion Speed: {kappa:.2f} (1/kappa = {1/kappa:.2f} years)")
+        print(f"• Vol-of-Vol: {sigma*100:.1f}%")
+        print(f"• Leverage Effect (ρ): {rho:.2f}")
+        print(f"• Jump Intensity: {lambd:.2f} jumps/year")
+        print(f"• Average Jump Size: {mu_j*100:.1f}%")
+        print(f"• Jump Uncertainty: {delta_j*100:.1f}%")
+        
+        return calibrated_params
+    else:
+        print("Calibration failed:", result.message)
+        return None
+
+# Run the example
+example_calibration()
+```
+
+```{python}
+#| include: false 
+#| eval: false
+#| cache: true
+option_chain = options_df
+event_date = pd.to_datetime('2025-12-15')
+option_chain['mid_price'] = (option_chain['bid'] + option_chain['ask']) / 2
+
+S0 = 100.0  # Current underlying price (get from market data)
+r = 0.05    # Risk-free rate (get from Treasury yields)
+q = 0.02    # Dividend yield (get from stock data)
+
+def analyze_event_effect(event_date, days_before=30, days_after=30):
+    """
+    Analyze how an event affects Bates parameters
+    """
+    # Pre-event calibration (using options from before the event)
+    pre_chain, S0_pre, r_pre, q_pre = option_chain[option_chain['expiration'] - (event_date)<=pd.Timedelta(0)], S0, r, q
+    pre_params = calibrate_bates_from_chain(pre_chain, S0_pre, r_pre, q_pre)
+    
+    # Post-event calibration  
+    post_chain, S0_post, r_post, q_post = option_chain[option_chain['expiration'] - (event_date)>pd.Timedelta(0)], S0+10, r, q
+    post_params = calibrate_bates_from_chain(post_chain, S0_post, r_post, q_post)
+    
+    # Compare parameter changes
+    param_names = ['v0', 'kappa', 'theta', 'sigma', 'rho', 'lambda', 'mu_j', 'delta_j']
+    
+    print("Parameter Changes due to Event:")
+    for name, pre, post in zip(param_names, pre_params.x, post_params.x):
+        change_pct = (post - pre) / pre * 100
+        print(f"{name:8}: {pre:.4f} → {post:.4f} ({change_pct:+.1f}%)")
+    
+    return pre_params, post_params
+
+analyze_event_effect(event_date = event_date)
+```
+
+```{python}
+#| include: false
+#| label: final_beep
+import pygame
+pygame.mixer.init()
+pygame.mixer.Sound("C:/Offline_Projects/beep.mp3").play()
+```
+
 ## Sitography
 
 1. [A New Nonparametric Estimate of the Risk-Neutral Density with Applications to Variance Swaps - Frontiers](https://www.frontiersin.org/journals/applied-mathematics-and-statistics/articles/10.3389/fams.2020.611878/full)
@@ -770,11 +1264,3 @@ results_df
 16. [Risk Premium around Macroeconomic Announcements: Evidence from Delta-Neutral Straddles](https://lup.lub.lu.se/student-papers/record/9197108/file/9197117.pdf)
 17. [NBER WORKING PAPER SERIES INFLATION DYNAMICS AND TIME-VARYING VOLATILITY](https://www.nber.org/system/files/working_papers/w19148/w19148.pdf)
 18. [The Stock Implied Volatility and the Implied Dividend Volatility - ResearchGate](https://www.researchgate.net/publication/356462920_The_Stock_Implied_Volatility_and_the_Implied_Dividend_Volatility)
-
-```{python}
-#| include: false
-#| label: final_beep
-import pygame
-pygame.mixer.init()
-pygame.mixer.Sound("C:/Offline_Projects/beep.mp3").play()
-```
