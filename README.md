@@ -1,4 +1,5 @@
 # Implied Probability Density Functions the Structural Dynamics of Option-Imp lied Probability Distributions (IVPDF)
+
 Overview
 
 This project investigates the structural dynamics of option-implied probability distributions (IVPDFs), also known as risk-neutral densities (RNDs). These distributions represent the market’s forward-looking expectations of asset prices and contain valuable information on variance, skewness, and kurtosis, which map directly to perceived risk and tail-event probabilities.
@@ -9,7 +10,7 @@ By extracting and analyzing these densities, the project aims to:
 
 - Quantify tail risk and shifts in investor sentiment around macroeconomic and geopolitical events.
 
-- Provide forecasting tools for realized volatility, tail events, and risk premia.
+- Analyze the informational content of RND moments for forecasting returns, volatility, and jump risk, also to see if there is the possibility of identifying abnormal behaviour in option markets in the vicininty of major events.
 
 ## Core Contributions
 
@@ -21,19 +22,9 @@ Breeden-Litzenberger Theorem: The second derivative of the call price curve with
 
 Key Distinction: Risk-neutral vs. physical probability distributions, linked via the stochastic discount factor (pricing kernel).
 
-### 2. Practical Extraction Techniques
+Interpolation & curve fitting of discrete option data.
 
-- Interpolation & curve fitting of discrete option data.
-
-- Numerical differentiation with regularization to address:
-
-- Noise amplification
-
-- Non-negativity violations
-
-- Arbitrage constraints (monotonicity, convexity).
-
-- Advanced smoothing methods (e.g., TV regularization, ADMM).
+Different pricing models (e.g., Black-Scholes, Heston, Bates) to understand if more efficient prices help better explain this phenomenon.
 
 ### 3. Informational Content of the RND
 
@@ -49,9 +40,9 @@ Risk Premia:
 
 - Volatility Risk Premium (VRP)
 
-* Volatility Risk Premium (VRP)
+- Volatility Risk Premium (VRP)
 
-* Skewness Risk Premium (SRP) — shown to predict excess returns and tail events.
+- Skewness Risk Premium (SRP) — shown to predict excess returns and tail events.
 
 ### 4. Event-Driven Analysis
 
@@ -61,18 +52,6 @@ Captures structural shifts in beliefs vs. risk aversion that aggregate measures 
 
 Provides granular insights into how markets price uncertainty during critical announcements.
 
-### 5. Applications
-
-Forecasting:
-
-Returns using SRP.
-
-Realized volatility and jump risk using RND moments.
-
-Pricing Tail-Sensitive Instruments: Digital options, variance swaps, etc.
-
-Recovering Risk Aversion Functions: Empirical insights into the "pricing kernel puzzle" during stress events.
-
 ## Key References
 
 - Breeden, D., & Litzenberger, R. (1978). Prices of state-contingent claims implicit in option prices.
@@ -80,8 +59,12 @@ Recovering Risk Aversion Functions: Empirical insights into the "pricing kernel 
 - Bollerslev, T., Tauchen, G., & Zhou, H. (2009). Expected stock returns and variance risk premia.
 
 How to Use
+1. Download the html file if you only want to see the result and the process behind it without running the code.
+
+2. to run the code download the repository, and run either the Quarto file or the python script.
 
 Future Directions
 
 - Incorporating machine learning–based regularization for density estimation.
 - Applying IVPDF methods to systemic risk monitoring.
+- Forecasting movments using RND moment dynamics. like skewness risk premium.
