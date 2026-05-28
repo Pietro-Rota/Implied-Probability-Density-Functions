@@ -536,7 +536,6 @@ def plot_3d(x_vals, y_vals, z_vals, title="IDK", backend="plotly", y_ticklabels=
 
     else:
         raise ValueError("backend must be 'plotly' or 'matplotlib'")
-# ...existing code...
 ```
 
 ```{python}
@@ -846,3 +845,4 @@ pygame.mixer.Sound("C:/Offline_Projects/beep.mp3").play()
 16. [Risk Premium around Macroeconomic Announcements: Evidence from Delta-Neutral Straddles](https://lup.lub.lu.se/student-papers/record/9197108/file/9197117.pdf)
 17. [NBER WORKING PAPER SERIES INFLATION DYNAMICS AND TIME-VARYING VOLATILITY](https://www.nber.org/system/files/working_papers/w19148/w19148.pdf)
 18. [The Stock Implied Volatility and the Implied Dividend Volatility - ResearchGate](https://www.researchgate.net/publication/356462920_The_Stock_Implied_Volatility_and_the_Implied_Dividend_Volatility)
+

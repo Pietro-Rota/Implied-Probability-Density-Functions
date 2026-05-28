@@ -125,7 +125,7 @@ acs-*.bib
 
 # knitr
 *-concordance.tex
-# TODO Comment the next line if you want to keep your tikz graphics files
+#! Comment the next line if you want to keep your tikz graphics files
 *.tikz
 *-tikzDictionary
 
@@ -255,3 +255,4 @@ __pycache__/
 .vscode
 
 /UCSC_dissertation_template-master
+**/*.quarto_ipynb
